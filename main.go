@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Player struct {
@@ -40,14 +42,48 @@ func (b *Board) InitBoard() {
 }
 
 func (b *Board) InitBoat() {
-	//init boats randomly
+	//horizontal: 0, vertical: 1
+	orientation := [2]int{0, 1}
 
-	//definir une orientation
-	b.Boats[0] = [4]int{0, 0, 0, 1}
-	b.Boats[1] = [4]int{1, 0, 1, 2}
-	b.Boats[2] = [4]int{2, 0, 2, 3}
-	b.Boats[3] = [4]int{3, 0, 3, 4}
-	b.Boats[4] = [4]int{4, 0, 4, 5}
+	rand.Seed(time.Now().UnixNano())
+
+	//init boats
+	for i := 0; i < 5; i++ {
+		//init boat randomly
+		b.Boats[i][0] = rand.Intn(10)
+		b.Boats[i][1] = rand.Intn(10)
+
+		//check if the boat is horizontal or vertical
+		if orientation[rand.Intn(2)] == 0 {
+			//horizontal
+			b.Boats[i][2] = b.Boats[i][0]
+			b.Boats[i][3] = b.Boats[i][1] + rand.Intn(4) + 1
+		} else {
+			//vertical
+			b.Boats[i][2] = b.Boats[i][0] + rand.Intn(4) + 1
+			b.Boats[i][3] = b.Boats[i][1]
+		}
+
+		//check if the boat is out of the board
+		if b.Boats[i][2] > 9 || b.Boats[i][3] > 9 {
+			i--
+		}
+
+		//check if the boat is on another boat by going through all the boats
+		for j := 0; j < i; j++ {
+			if (b.Boats[i][0] >= b.Boats[j][0] && b.Boats[i][0] <= b.Boats[j][2] && b.Boats[i][1] >= b.Boats[j][1] && b.Boats[i][1] <= b.Boats[j][3]) ||
+				(b.Boats[i][2] >= b.Boats[j][0] && b.Boats[i][2] <= b.Boats[j][2] && b.Boats[i][3] >= b.Boats[j][1] && b.Boats[i][3] <= b.Boats[j][3]) {
+				i--
+				break
+			}
+		}
+	}
+
+	//display all coordinates of the boats
+	for i := 0; i < 5; i++ {
+		fmt.Println(b.Boats[i][0], b.Boats[i][1], b.Boats[i][2], b.Boats[i][3])
+	}
+
 }
 
 func (b *Board) SendBoard(w http.ResponseWriter, req *http.Request) {
