@@ -78,12 +78,6 @@ func (b *Board) InitBoat() {
 			}
 		}
 	}
-
-	//display all coordinates of the boats
-	for i := 0; i < 5; i++ {
-		fmt.Println(b.Boats[i][0], b.Boats[i][1], b.Boats[i][2], b.Boats[i][3])
-	}
-
 }
 
 func (b *Board) SendBoard(w http.ResponseWriter, req *http.Request) {
@@ -120,29 +114,29 @@ func (b *Board) Hit(w http.ResponseWriter, req *http.Request) {
 		}
 
 		if _, ok := req.PostForm["x"]; !ok {
-			fmt.Fprintln(w, "Position x is missing")
+			fmt.Fprintln(w, "Position x n'existe pas")
 			return
 		}
 
 		if _, ok := req.PostForm["y"]; !ok {
-			fmt.Fprintln(w, "Position y is missing")
+			fmt.Fprintln(w, "Position y n'existe pas")
 			return
 		}
 
 		x, err := strconv.Atoi(req.PostForm["x"][0])
 		if err != nil {
-			fmt.Fprintln(w, "Position x is not a number")
+			fmt.Fprintln(w, "Position x n'est pas un nombre")
 			return
 		}
 
 		y, err := strconv.Atoi(req.PostForm["y"][0])
 		if err != nil {
-			fmt.Fprintln(w, "Position y is not a number")
+			fmt.Fprintln(w, "Position y n'est pas un nombre")
 			return
 		}
 
 		if x < 0 || x > 9 || y < 0 || y > 9 {
-			fmt.Fprintln(w, "Position out of the board")
+			fmt.Fprintln(w, "Position hors du plateau")
 			return
 		}
 
@@ -151,11 +145,11 @@ func (b *Board) Hit(w http.ResponseWriter, req *http.Request) {
 			for i := 0; i < len(b.Boats); i++ {
 				if x >= b.Boats[i][0] && x <= b.Boats[i][2] && y >= b.Boats[i][1] && y <= b.Boats[i][3] {
 					b.Board[x][y] = "2"
-					fmt.Fprintln(w, "Hit")
+					fmt.Fprintln(w, "Touché")
 
 					if b.CheckBoatSunk(x, y) {
 						b.NbBoatsLeft--
-						fmt.Fprintln(w, "Boat sunk")
+						fmt.Fprintln(w, "Coulé")
 
 						for j := b.Boats[i][0]; j <= b.Boats[i][2]; j++ {
 							for k := b.Boats[i][1]; k <= b.Boats[i][3]; k++ {
@@ -169,10 +163,10 @@ func (b *Board) Hit(w http.ResponseWriter, req *http.Request) {
 			}
 
 			b.Board[x][y] = "1"
-			fmt.Fprintln(w, "Miss")
+			fmt.Fprintln(w, "Raté")
 
 		} else if b.Board[x][y] == "1" || b.Board[x][y] == "2" {
-			fmt.Fprintln(w, "Already hit")
+			fmt.Fprintln(w, "Déjà touché")
 		} else {
 			fmt.Fprintln(w, "Something went bad")
 		}
@@ -280,7 +274,12 @@ func (p *Player) GetName(id int) {
 }
 
 func (p *Player) DisplayName() {
-	fmt.Printf("- %s (id: %d)\n", strings.Replace(p.Name, "\n", "", -1), p.ID)
+
+	if p.Board.NbBoatsLeft == 0 {
+		fmt.Printf("- %s (id: %d) (Partie terminé)\n", strings.Replace(p.Name, "\n", "", -1), p.ID)
+	} else {
+		fmt.Printf("- %s (id: %d)\n", strings.Replace(p.Name, "\n", "", -1), p.ID)
+	}
 }
 
 func (p *Player) GetBoard() {
@@ -315,7 +314,25 @@ func (p *Player) GetNbBoats() {
 	p.Board.NbBoatsLeft, _ = strconv.Atoi(string(body))
 }
 
+func (p *Player) Hit_request(x int, y int) string {
+	//envoyer les coordonnées de la case à attaquer
+	resp, err := http.PostForm("http://"+p.IP+":"+p.Port+"/hit", url.Values{"x": {strconv.Itoa(x)}, "y": {strconv.Itoa(y)}})
+	if err != nil {
+		fmt.Println("Error while sending the hit")
+	}
+
+	//recuperer le resultat de l'attaque
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Println("Error while reading the hit")
+	}
+
+	return string(body)
+}
+
 func main() {
+
+	fmt.Print("==================================== Bataille Navale ====================================\n")
 
 	var player Player
 	var players []Player
@@ -335,11 +352,11 @@ func main() {
 	player.Board.InitBoat()
 
 	//Demander le port sur lequel le serveur va écouter
-	fmt.Print("Entrer le port sur lequel le serveur va écouter : ")
+	fmt.Print("\nEntrer le port sur lequel le serveur va écouter : ")
 	fmt.Scan(&player.Port)
 
 	//demander le nom du joueur
-	fmt.Print("Entrer votre nom : (Il sera affiché sur l'écran des autres joueurs) ")
+	fmt.Print("\nEntrer votre nom : (Il sera affiché sur l'écran des autres joueurs) ")
 	fmt.Scan(&player.Name)
 
 	//start a goroutine
@@ -349,10 +366,10 @@ func main() {
 	for {
 
 		for addPlayer != "n" {
-			var player Player
-			fmt.Print("Entrer l'adresse ip du joueur : ")
+			fmt.Print("\nEntrer l'adresse ip du joueur : ")
 			fmt.Scan(&player.IP)
-			fmt.Print("Entrer le port du joueur : ")
+
+			fmt.Print("\nEntrer le port du joueur : ")
 			fmt.Scan(&player.Port)
 			players = append(players, player)
 
@@ -377,16 +394,19 @@ func main() {
 			fmt.Scan(&addPlayer)
 		}
 
+		fmt.Print("\n===============================  Fin de la configuration ===============================\n")
+
 		//On recupere le nom des joueurs
 		for i := 0; i < len(players); i++ {
 			players[i].GetName(i)
 		}
 
 		//afficher le nom des joueurs
-		fmt.Println("Joueurs disponible : ")
+		fmt.Println("\nJoueurs disponible : ")
 		for i := 0; i < len(players); i++ {
 			players[i].DisplayName()
 		}
+		fmt.Println()
 
 		//choisir contre qui jouer
 		fmt.Print("Entrer l'id du joueur contre qui vous voulez jouer : ")
@@ -406,17 +426,14 @@ func main() {
 		fmt.Print("Entrer les coordonnées de la case à attaquer : ")
 		fmt.Scan(&x, &y)
 
-		//envoyer les coordonnées de la case à attaquer
-		resp, err := http.PostForm("http://"+players[idPlayer].IP+":"+players[idPlayer].Port+"/hit", url.Values{"x": {strconv.Itoa(x)}, "y": {strconv.Itoa(y)}})
-		if err != nil {
-			fmt.Println("Error while sending the hit")
-		}
-
-		//recuperer le resultat de l'attaque
-		body, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			fmt.Println("Error while reading the hit")
-		}
+		body := players[idPlayer].Hit_request(x, y)
 		fmt.Println(string(body))
+
+		//recuperer le nombre de bateaux restant
+		players[idPlayer].GetNbBoats()
+		//afficher le nombre de bateaux restant
+		if players[idPlayer].Board.CheckWin() {
+			fmt.Println("\nVous avez gagné !")
+		}
 	}
 }
